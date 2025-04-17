@@ -1,9 +1,11 @@
 import Chat from "./components/Chat";
+import Canvas from "./components/Canvas";
 
 function App() {
   return (
     <>
-      <Chat />
+    <Canvas />
+      {/* <Chat /> */}
     </>
   );
 }
