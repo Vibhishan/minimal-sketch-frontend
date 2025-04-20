@@ -1,4 +1,10 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
+import { io } from "socket.io-client";
+import {
+  JOIN_EVENT,
+  DRAW_EVENT,
+  SOCKET_SERVER_URL,
+} from "../constants/webSocketEvents.js";
 
 export default function Canvas() {
   const canvasRef = useRef(null); // Ref to the canvas HTML element
@@ -9,13 +15,78 @@ export default function Canvas() {
   const [lineWidth, setLineWidth] = useState(3);
   const [strokeColor, setStrokeColor] = useState("#000000"); // Default to black
 
+  const [socket, setSocket] = useState(null); // Socket connection
+  const [isConnected, setIsConnected] = useState(false); // Connection status
+  const [mySocketId, setMySocketId] = useState(null);
+  const [roomToJoin, setRoomToJoin] = useState("");
+  const [joinedRoom, setJoinedRoom] = useState("");
+
   const [completedStrokes, setCompletedStrokes] = useState([]); // Store completed strokes
   const currentStrokeRef = useRef(null); // Ref to track the current stroke being drawn
-  const strokeRef = useRef(completedStrokes);
+  // const strokeRef = useRef(completedStrokes);
+
+  const handleRoomToJoinChange = (event) => {
+    setRoomToJoin(event.target.value);
+  };
+
+  const handleJoinRoom = useCallback(() => {
+    if (socket && isConnected && roomToJoin.trim()) {
+      socket.emit(JOIN_EVENT, roomToJoin);
+      console.log("Joining room:", roomToJoin);
+      setJoinedRoom(roomToJoin);
+      setRoomToJoin("");
+    }
+  }, [socket, isConnected, roomToJoin]);
+
+  // useEffect(() => {
+  //   strokeRef.current = completedStrokes;
+  // }, [completedStrokes]);
 
   useEffect(() => {
-    strokeRef.current = completedStrokes;
-  }, [completedStrokes]);
+    const newSocket = io(SOCKET_SERVER_URL);
+    setSocket(newSocket);
+
+    newSocket.on("connect", () => {
+      console.log("Connected to socket server: ", newSocket.id);
+      setIsConnected(true);
+      setMySocketId(newSocket.id);
+      setJoinedRoom("");
+    });
+
+    newSocket.on(DRAW_EVENT, ({ senderId, strokes }) => {
+      if (!newSocket || newSocket.id === senderId) return;
+      console.log("Received draw event from:", senderId);
+
+      const context = contextRef.current;
+
+      context.save();
+
+      strokes.forEach((stroke) => {
+        // if (
+        //   !stroke ||
+        //   !Array.isArray(stroke.points) ||
+        //   stroke.points.length === 0
+        // ) {
+        //   console.warn("Skipping invalid stroke object received:", stroke);
+        //   return;
+        // }
+        // Set context properties for this specific stroke
+        context.lineWidth = stroke.lineWidth || 3;
+        context.strokeStyle = stroke.color || "#000000";
+        context.globalCompositeOperation =
+          stroke.tool === "eraser" ? "destination-out" : "source-over";
+
+        // Draw the line segment for the stroke
+        context.beginPath();
+        context.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+          context.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        context.stroke();
+        // context.closePath(); // Close path for this segment
+      });
+    });
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -76,10 +147,7 @@ export default function Canvas() {
         tool: tool,
         color: strokeColor,
         lineWidth: lineWidth,
-        startX: x,
-        startY: y,
-        lastX: x,
-        lastY: y,
+        points: [{ x, y }],
       };
       event.preventDefault();
 
@@ -98,8 +166,7 @@ export default function Canvas() {
     context.stroke();
 
     if (currentStrokeRef.current) {
-      currentStrokeRef.current.lastX = x;
-      currentStrokeRef.current.lastY = y;
+      currentStrokeRef.current.points.push({ x, y });
     }
     event.preventDefault();
     console.log("Drawing at:", x, y);
@@ -112,14 +179,14 @@ export default function Canvas() {
       context.closePath();
       isDrawingRef.current = false;
 
-      if (currentStrokeRef.current) {
-        const newStroke = {
-          ...currentStrokeRef.current,
-          endX: currentStrokeRef.current.lastX,
-          endY: currentStrokeRef.current.lastY,
-        };
-
-        setCompletedStrokes((prevStrokes) => [...prevStrokes, newStroke]);
+      if (
+        currentStrokeRef.current &&
+        currentStrokeRef.current.points.length > 0
+      ) {
+        setCompletedStrokes((prevStrokes) => [
+          ...prevStrokes,
+          { ...currentStrokeRef.current },
+        ]);
         currentStrokeRef.current = null; // Reset current stroke
       }
       console.log("Stop drawing");
@@ -148,24 +215,72 @@ export default function Canvas() {
   };
 
   useEffect(() => {
-    const logInterval = 1000;
+    const logInterval = 20;
 
     const intervalId = setInterval(() => {
-      if (strokeRef.current.length > 0) {
-        const payLoadToLog = [...strokeRef.current];
-        console.log("Current strokes:", payLoadToLog);
+      setCompletedStrokes((currentStrokes) => {
+        // currentStrokes is guaranteed to be the latest state here
 
-        setCompletedStrokes([]);
-      }
+        if (currentStrokes.length > 0) {
+          // 1. This is the batch to send
+          const payloadToSend = [...currentStrokes]; // Create copy if needed outside this scope
+          const currentLondonTime = new Date().toLocaleTimeString("en-GB", {
+            timeZone: "Europe/London",
+          });
+          console.log(
+            `[${currentLondonTime}] Strokes Payload to Send (${payloadToSend.length} strokes):`,
+            payloadToSend
+          );
+
+          // 2. EMIT TO WEBSOCKET
+          if (socket && isConnected && joinedRoom) {
+            const payload = {
+              senderId: socket.id,
+              roomId: joinedRoom,
+              strokes: payloadToSend,
+            };
+            socket.emit(DRAW_EVENT, payload);
+            // 3. Return empty array to CLEAR state AFTER successful emit attempt
+            return [];
+          } else {
+            console.warn(
+              "Socket not ready or not in room. Strokes NOT cleared, will try again next interval."
+            );
+            // 3b. Return original array to KEEP state if emit failed
+            return currentStrokes;
+          }
+        } else {
+          // No strokes to send, return the current (empty) state
+          return currentStrokes; // or return [];
+        }
+      });
     }, logInterval);
 
     return () => {
       clearInterval(intervalId);
     };
-  });
+  }, [socket, isConnected, joinedRoom, mySocketId]);
 
   return (
     <div className="canvas-container">
+      <p>
+        Status: <span>{isConnected ? "Connected" : "Disconnected"}</span>
+      </p>
+      {mySocketId && (
+        <p>
+          My Socket ID: <span>{mySocketId}</span> (You can use this in the 'Send
+          To' field on another client to test direct messages)
+        </p>
+      )}
+      <div>
+        <input
+          type="text"
+          value={roomToJoin}
+          onChange={handleRoomToJoinChange}
+          placeholder="Enter Room ID"
+        />
+        <button onClick={handleJoinRoom}>Join</button>
+      </div>
       <div className="toolbar">
         {/* Tool Selection */}
         <button

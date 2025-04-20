@@ -8,9 +8,6 @@ export const RECEIVE_EVENT = "receive_message";
 
 // Drawing Events
 export const DRAW_EVENT = "draw_event";
-export const DRAW_START = "draw_start";
-export const DRAW_MOVE = "draw_move";
-export const DRAW_END = "draw_end";
 export const CLEAR_CANVAS = "clear_canvas";
 
 // Game Events
