@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
+import {
+  JOIN_EVENT,
+  SEND_EVENT,
+  RECEIVE_EVENT,
+} from "../constants/webSocketEvents.js";
+import { SOCKET_SERVER_URL } from "../constants/webSocketEvents.js";
 import { io } from "socket.io-client";
-
-const SOCKET_SERVER_URL = "http://localhost:4000";
-const JOIN_EVENT = "join_room";
-const SEND_EVENT = "send_message";
-const RECEIVE_EVENT = "receive_message";
 
 export default function Chat() {
   const [socket, setSocket] = useState(null);

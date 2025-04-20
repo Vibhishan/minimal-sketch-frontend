@@ -1,19 +1,27 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 
 export default function Canvas() {
-  const canvasRef = useRef(null);
-  const contextRef = useRef(null);
-  const isDrawingRef = useRef(false);
+  const canvasRef = useRef(null); // Ref to the canvas HTML element
+  const contextRef = useRef(null); // Ref to the canvas 2D context
+  const isDrawingRef = useRef(false); // Ref to track if drawing is active
 
-  const [tool, setTool] = useState("pencil");
+  const [tool, setTool] = useState("pencil"); // 'pencil' or 'eraser'
   const [lineWidth, setLineWidth] = useState(3);
-  const [strokeColor, setStrokeColor] = useState("#000000");
+  const [strokeColor, setStrokeColor] = useState("#000000"); // Default to black
+
+  const [completedStrokes, setCompletedStrokes] = useState([]); // Store completed strokes
+  const currentStrokeRef = useRef(null); // Ref to track the current stroke being drawn
+  const strokeRef = useRef(completedStrokes);
+
+  useEffect(() => {
+    strokeRef.current = completedStrokes;
+  }, [completedStrokes]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.width = 600;
-    canvas.height = 400;
+    canvas.width = 800; // Example fixed width
+    canvas.height = 600; // Example fixed height
 
     const context = canvas.getContext("2d");
 
@@ -21,16 +29,15 @@ export default function Canvas() {
     context.lineJoin = "round";
 
     contextRef.current = context;
-    console.log("Canvas initialized");
-
+    console.log("Canvas context initialized", contextRef.current);
     clearCanvas();
   }, []);
 
   useEffect(() => {
     if (!contextRef.current) return;
+
     contextRef.current.lineWidth = lineWidth;
     contextRef.current.strokeStyle = strokeColor;
-
     contextRef.current.globalCompositeOperation =
       tool === "eraser" ? "destination-out" : "source-over";
   }, [lineWidth, strokeColor, tool]);
@@ -39,30 +46,47 @@ export default function Canvas() {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
 
-    if (event.nativeEvent.touches && event.nativeEvent.touches.length > 0) {
-      const touch = event.nativeEvent.touches[0];
+    if (event.nativeEvent.offsetX !== undefined) {
+      return { x: event.nativeEvent.offsetX, y: event.nativeEvent.offsetY };
+    } else if (
+      event.nativeEvent.touches &&
+      event.nativeEvent.touches.length > 0
+    ) {
       const rect = canvas.getBoundingClientRect();
+      const touch = event.nativeEvent.touches[0];
+
       return {
         x: touch.clientX - rect.left,
         y: touch.clientY - rect.top,
       };
     }
-    return {
-      x: event.clientX - canvas.getBoundingClientRect().left,
-      y: event.clientY - canvas.getBoundingClientRect().top,
-    };
+    return { x: 0, y: 0 };
   };
 
-  const startDrawing = useCallback((event) => {
-    const context = contextRef.current;
-    if (!context) return;
-    const { x, y } = getCoordinates(event);
-    context.beginPath();
-    context.moveTo(x, y);
-    isDrawingRef.current = true;
-    event.preventDefault(); // Prevent default touch actions like scrolling
-    console.log("Start drawing at:", x, y);
-  }, []); // Dependencies: None needed as it reads from refs mostly
+  const startDrawing = useCallback(
+    (event) => {
+      const context = contextRef.current;
+      if (!context) return;
+      const { x, y } = getCoordinates(event);
+      context.beginPath();
+      context.moveTo(x, y);
+      isDrawingRef.current = true;
+
+      currentStrokeRef.current = {
+        tool: tool,
+        color: strokeColor,
+        lineWidth: lineWidth,
+        startX: x,
+        startY: y,
+        lastX: x,
+        lastY: y,
+      };
+      event.preventDefault();
+
+      console.log("Start drawing at:", x, y);
+    },
+    [tool, strokeColor, lineWidth]
+  );
 
   const draw = useCallback((event) => {
     if (!isDrawingRef.current) return;
@@ -72,8 +96,14 @@ export default function Canvas() {
     const { x, y } = getCoordinates(event);
     context.lineTo(x, y);
     context.stroke();
-    event.preventDefault(); // Prevent default touch actions
-  }, []); // Dependencies: None needed
+
+    if (currentStrokeRef.current) {
+      currentStrokeRef.current.lastX = x;
+      currentStrokeRef.current.lastY = y;
+    }
+    event.preventDefault();
+    console.log("Drawing at:", x, y);
+  }, []);
 
   const stopDrawing = useCallback(() => {
     const context = contextRef.current;
@@ -81,39 +111,77 @@ export default function Canvas() {
     if (isDrawingRef.current) {
       context.closePath();
       isDrawingRef.current = false;
+
+      if (currentStrokeRef.current) {
+        const newStroke = {
+          ...currentStrokeRef.current,
+          endX: currentStrokeRef.current.lastX,
+          endY: currentStrokeRef.current.lastY,
+        };
+
+        setCompletedStrokes((prevStrokes) => [...prevStrokes, newStroke]);
+        currentStrokeRef.current = null; // Reset current stroke
+      }
       console.log("Stop drawing");
     }
-  }, []); // Dependencies: None needed
+  }, []);
 
   // --- Toolbar Actions ---
   const handleClearCanvas = useCallback(() => {
     clearCanvas();
-  }, []); // Dependencies: Include clearCanvas if it uses state/props
+  }, []);
 
   // Encapsulate clear logic
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     const context = contextRef.current;
     if (canvas && context) {
-      // Clear the canvas
       context.clearRect(0, 0, canvas.width, canvas.height);
-      // Optional: Fill with a background color if needed (e.g., white)
-      // Store current composite operation
       const currentGCO = context.globalCompositeOperation;
-      context.globalCompositeOperation = "source-over"; // Ensure we can fill
-      context.fillStyle = "#FFFFFF"; // White background
+      context.globalCompositeOperation = "source-over";
+      context.fillStyle = "#FFFFFF";
       context.fillRect(0, 0, canvas.width, canvas.height);
-      // Restore composite operation
       context.globalCompositeOperation = currentGCO;
 
       console.log("Canvas cleared");
     }
   };
+
+  useEffect(() => {
+    const logInterval = 1000;
+
+    const intervalId = setInterval(() => {
+      if (strokeRef.current.length > 0) {
+        const payLoadToLog = [...strokeRef.current];
+        console.log("Current strokes:", payLoadToLog);
+
+        setCompletedStrokes([]);
+      }
+    }, logInterval);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  });
+
   return (
-    <div>
-      <div>
-        <button onClick={() => setTool("pencil")}>Pencil</button>
-        <button onClick={() => setTool("eraser")}>Eraser</button>
+    <div className="canvas-container">
+      <div className="toolbar">
+        {/* Tool Selection */}
+        <button
+          onClick={() => setTool("pencil")}
+          className={tool === "pencil" ? "active" : ""}
+        >
+          Pencil
+        </button>
+        <button
+          onClick={() => setTool("eraser")}
+          className={tool === "eraser" ? "active" : ""}
+        >
+          Eraser
+        </button>
+
+        {/* Color Picker */}
         <label htmlFor="strokeColor">Color:</label>
         <input
           type="color"
@@ -137,17 +205,28 @@ export default function Canvas() {
 
         {/* Clear Button */}
         <button onClick={handleClearCanvas}>Clear Canvas</button>
+        <span style={{ marginLeft: "auto", fontSize: "0.8em", color: "#555" }}>
+          London Time:{" "}
+          {new Date().toLocaleTimeString("en-GB", {
+            timeZone: "Europe/London",
+          })}
+        </span>
       </div>
+
       <canvas
         ref={canvasRef}
         onMouseDown={startDrawing}
         onMouseMove={draw}
         onMouseUp={stopDrawing}
-        onMouseLeave={stopDrawing}
+        onMouseLeave={stopDrawing} // Stop drawing if mouse leaves canvas
         onTouchStart={startDrawing}
         onTouchMove={draw}
         onTouchEnd={stopDrawing}
-      ></canvas>
+        // Add CSS class for styling
+        className="drawing-canvas"
+      >
+        Your browser does not support the HTML canvas element.
+      </canvas>
     </div>
   );
 }
