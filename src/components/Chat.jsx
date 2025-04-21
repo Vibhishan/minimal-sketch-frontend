@@ -1,63 +1,17 @@
-import React, { useCallback, useEffect, useState } from "react";
-import {
-  JOIN_EVENT,
-  SEND_EVENT,
-  RECEIVE_EVENT,
-} from "../constants/webSocketEvents.js";
-import { SOCKET_SERVER_URL } from "../constants/webSocketEvents.js";
-import { io } from "socket.io-client";
+import React, { useState, useContext } from "react";
+import { SEND_EVENT, RECEIVE_EVENT } from "../constants/webSocketEvents.js";
+import { SocketContext } from "./Game";
 
 export default function Chat() {
-  const [socket, setSocket] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [mySocketId, setMySocketId] = useState(null);
-
-  const [roomToJoin, setRoomToJoin] = useState("");
-  const [joinedRoom, setJoinedRoom] = useState("");
   const [messageInput, setMessageInput] = useState("");
   const [receivedMessages, setReceivedMessages] = useState([]);
-
-  useEffect(() => {
-    // connet to socket server
-    const newSocket = io(SOCKET_SERVER_URL);
-    setSocket(newSocket);
-
-    newSocket.on("connect", () => {
-      console.log("Connected to socket server: ", newSocket.id);
-      setIsConnected(true);
-      setMySocketId(newSocket.id);
-      setJoinedRoom("");
-    });
-
-    newSocket.on(RECEIVE_EVENT, (data) => {
-      console.log("Received message:", data);
-      setReceivedMessages((prevMessages) => [...prevMessages, data]);
-    });
-
-    return () => {
-      console.log("Disconnecting from socket server");
-      newSocket.disconnect();
-    };
-  }, []);
-
-  const handleRoomToJoinChange = (event) => {
-    setRoomToJoin(event.target.value);
-  };
-
-  const handleJoinRoom = useCallback(() => {
-    if (socket && isConnected && roomToJoin.trim()) {
-      socket.emit(JOIN_EVENT, roomToJoin);
-      console.log("Joining room:", roomToJoin);
-      setJoinedRoom(roomToJoin);
-      setRoomToJoin("");
-    }
-  }, [socket, isConnected, roomToJoin]);
+  const { socket, isConnected, joinedRoom } = useContext(SocketContext);
 
   const handleMessageInputChange = (event) => {
     setMessageInput(event.target.value);
   };
 
-  const handleSendMessage = useCallback(() => {
+  const handleSendMessage = () => {
     if (socket && isConnected && messageInput.trim() && joinedRoom) {
       const payload = {
         message: messageInput,
@@ -68,7 +22,7 @@ export default function Chat() {
       console.log("Sent message:", payload);
       setMessageInput("");
     }
-  }, [socket, isConnected, messageInput, joinedRoom]);
+  };
 
   const handleKeyPress = (event) => {
     if (event.key === "Enter") {
@@ -76,28 +30,22 @@ export default function Chat() {
     }
   };
 
-  return (
-    <div>
-      <p>
-        Status: <span>{isConnected ? "Connected" : "Disconnected"}</span>
-      </p>
-      {mySocketId && (
-        <p>
-          My Socket ID: <span>{mySocketId}</span> (You can use this in the 'Send
-          To' field on another client to test direct messages)
-        </p>
-      )}
-      <div>
-        <input
-          type="text"
-          value={roomToJoin}
-          onChange={handleRoomToJoinChange}
-          placeholder="Enter Room ID"
-        />
-        <button onClick={handleJoinRoom}>Join</button>
-      </div>
+  React.useEffect(() => {
+    if (!socket) return;
 
-      <div>
+    socket.on(RECEIVE_EVENT, (data) => {
+      console.log("Received message:", data);
+      setReceivedMessages((prevMessages) => [...prevMessages, data]);
+    });
+
+    return () => {
+      socket.off(RECEIVE_EVENT);
+    };
+  }, [socket]);
+
+  return (
+    <div className="chat-container">
+      <div className="messages-container">
         <h3>Messages</h3>
         {receivedMessages.length > 0 ? (
           <ul>
@@ -110,7 +58,7 @@ export default function Chat() {
         )}
       </div>
 
-      <div>
+      <div className="message-input">
         <input
           type="text"
           value={messageInput}

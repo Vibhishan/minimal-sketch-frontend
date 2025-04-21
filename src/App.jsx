@@ -1,12 +1,10 @@
-import Chat from "./components/Chat";
-import Canvas from "./components/Canvas";
+import Game from "./components/Game";
 
 function App() {
   return (
-    <>
-      <Canvas />
-      {/* <Chat /> */}
-    </>
+    <div className="app">
+      <Game />
+    </div>
   );
 }
 

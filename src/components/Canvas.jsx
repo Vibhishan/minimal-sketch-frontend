@@ -1,10 +1,12 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
-import { io } from "socket.io-client";
-import {
-  JOIN_EVENT,
-  DRAW_EVENT,
-  SOCKET_SERVER_URL,
-} from "../constants/webSocketEvents.js";
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  useContext,
+} from "react";
+import { DRAW_EVENT } from "../constants/webSocketEvents.js";
+import { SocketContext } from "./Game";
 
 export default function Canvas() {
   const canvasRef = useRef(null); // Ref to the canvas HTML element
@@ -15,84 +17,47 @@ export default function Canvas() {
   const [lineWidth, setLineWidth] = useState(3);
   const [strokeColor, setStrokeColor] = useState("#000000"); // Default to black
 
-  const [socket, setSocket] = useState(null); // Socket connection
-  const [isConnected, setIsConnected] = useState(false); // Connection status
-  const [mySocketId, setMySocketId] = useState(null);
-  const [roomToJoin, setRoomToJoin] = useState("");
-  const [joinedRoom, setJoinedRoom] = useState("");
-
+  const { socket, isConnected, joinedRoom } = useContext(SocketContext);
   const [completedStrokes, setCompletedStrokes] = useState([]); // Store completed strokes
   const currentStrokeRef = useRef(null); // Ref to track the current stroke being drawn
-  // const strokeRef = useRef(completedStrokes);
-
-  const handleRoomToJoinChange = (event) => {
-    setRoomToJoin(event.target.value);
-  };
-
-  const handleJoinRoom = useCallback(() => {
-    if (socket && isConnected && roomToJoin.trim()) {
-      socket.emit(JOIN_EVENT, roomToJoin);
-      console.log("Joining room:", roomToJoin);
-      setJoinedRoom(roomToJoin);
-      setRoomToJoin("");
-    }
-  }, [socket, isConnected, roomToJoin]);
-
-  // useEffect(() => {
-  //   strokeRef.current = completedStrokes;
-  // }, [completedStrokes]);
 
   useEffect(() => {
-    const newSocket = io(SOCKET_SERVER_URL);
-    setSocket(newSocket);
+    if (!socket) return;
 
-    newSocket.on("connect", () => {
-      console.log("Connected to socket server: ", newSocket.id);
-      setIsConnected(true);
-      setMySocketId(newSocket.id);
-      setJoinedRoom("");
-    });
-
-    newSocket.on(DRAW_EVENT, ({ senderId, strokes }) => {
-      if (!newSocket || newSocket.id === senderId) return;
+    socket.on(DRAW_EVENT, ({ senderId, strokes }) => {
+      if (socket.id === senderId) return;
       console.log("Received draw event from:", senderId);
 
       const context = contextRef.current;
+      if (!context) return;
 
       context.save();
 
       strokes.forEach((stroke) => {
-        // if (
-        //   !stroke ||
-        //   !Array.isArray(stroke.points) ||
-        //   stroke.points.length === 0
-        // ) {
-        //   console.warn("Skipping invalid stroke object received:", stroke);
-        //   return;
-        // }
-        // Set context properties for this specific stroke
         context.lineWidth = stroke.lineWidth || 3;
         context.strokeStyle = stroke.color || "#000000";
         context.globalCompositeOperation =
           stroke.tool === "eraser" ? "destination-out" : "source-over";
 
-        // Draw the line segment for the stroke
         context.beginPath();
         context.moveTo(stroke.points[0].x, stroke.points[0].y);
         for (let i = 1; i < stroke.points.length; i++) {
           context.lineTo(stroke.points[i].x, stroke.points[i].y);
         }
         context.stroke();
-        // context.closePath(); // Close path for this segment
       });
     });
-  }, []);
+
+    return () => {
+      socket.off(DRAW_EVENT);
+    };
+  }, [socket]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.width = 800; // Example fixed width
-    canvas.height = 600; // Example fixed height
+    canvas.width = 800;
+    canvas.height = 600;
 
     const context = canvas.getContext("2d");
 
@@ -187,18 +152,16 @@ export default function Canvas() {
           ...prevStrokes,
           { ...currentStrokeRef.current },
         ]);
-        currentStrokeRef.current = null; // Reset current stroke
+        currentStrokeRef.current = null;
       }
       console.log("Stop drawing");
     }
   }, []);
 
-  // --- Toolbar Actions ---
   const handleClearCanvas = useCallback(() => {
     clearCanvas();
   }, []);
 
-  // Encapsulate clear logic
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     const context = contextRef.current;
@@ -219,11 +182,8 @@ export default function Canvas() {
 
     const intervalId = setInterval(() => {
       setCompletedStrokes((currentStrokes) => {
-        // currentStrokes is guaranteed to be the latest state here
-
         if (currentStrokes.length > 0) {
-          // 1. This is the batch to send
-          const payloadToSend = [...currentStrokes]; // Create copy if needed outside this scope
+          const payloadToSend = [...currentStrokes];
           const currentLondonTime = new Date().toLocaleTimeString("en-GB", {
             timeZone: "Europe/London",
           });
@@ -232,7 +192,6 @@ export default function Canvas() {
             payloadToSend
           );
 
-          // 2. EMIT TO WEBSOCKET
           if (socket && isConnected && joinedRoom) {
             const payload = {
               senderId: socket.id,
@@ -240,47 +199,25 @@ export default function Canvas() {
               strokes: payloadToSend,
             };
             socket.emit(DRAW_EVENT, payload);
-            // 3. Return empty array to CLEAR state AFTER successful emit attempt
             return [];
           } else {
             console.warn(
               "Socket not ready or not in room. Strokes NOT cleared, will try again next interval."
             );
-            // 3b. Return original array to KEEP state if emit failed
             return currentStrokes;
           }
-        } else {
-          // No strokes to send, return the current (empty) state
-          return currentStrokes; // or return [];
         }
+        return currentStrokes;
       });
     }, logInterval);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [socket, isConnected, joinedRoom, mySocketId]);
+  }, [socket, isConnected, joinedRoom]);
 
   return (
     <div className="canvas-container">
-      <p>
-        Status: <span>{isConnected ? "Connected" : "Disconnected"}</span>
-      </p>
-      {mySocketId && (
-        <p>
-          My Socket ID: <span>{mySocketId}</span> (You can use this in the 'Send
-          To' field on another client to test direct messages)
-        </p>
-      )}
-      <div>
-        <input
-          type="text"
-          value={roomToJoin}
-          onChange={handleRoomToJoinChange}
-          placeholder="Enter Room ID"
-        />
-        <button onClick={handleJoinRoom}>Join</button>
-      </div>
       <div className="toolbar">
         {/* Tool Selection */}
         <button
@@ -303,7 +240,7 @@ export default function Canvas() {
           id="strokeColor"
           value={strokeColor}
           onChange={(e) => setStrokeColor(e.target.value)}
-          disabled={tool === "eraser"} // Disable color when erasing
+          disabled={tool === "eraser"}
         />
 
         {/* Line Width */}
@@ -312,7 +249,7 @@ export default function Canvas() {
           type="range"
           id="lineWidth"
           min="1"
-          max="50" // Adjust max width as needed
+          max="50"
           value={lineWidth}
           onChange={(e) => setLineWidth(parseInt(e.target.value, 10))}
         />
@@ -333,11 +270,10 @@ export default function Canvas() {
         onMouseDown={startDrawing}
         onMouseMove={draw}
         onMouseUp={stopDrawing}
-        onMouseLeave={stopDrawing} // Stop drawing if mouse leaves canvas
+        onMouseLeave={stopDrawing}
         onTouchStart={startDrawing}
         onTouchMove={draw}
         onTouchEnd={stopDrawing}
-        // Add CSS class for styling
         className="drawing-canvas"
       >
         Your browser does not support the HTML canvas element.
