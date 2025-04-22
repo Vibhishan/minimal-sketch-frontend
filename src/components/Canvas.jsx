@@ -5,53 +5,63 @@ import React, {
   useCallback,
   useContext,
 } from "react";
-import { DRAW_EVENT } from "../constants/webSocketEvents.js";
-import { SocketContext } from "./Game";
+import { DRAW_EVENT, CLEAR_CANVAS } from "../constants/webSocketEvents.js";
+import { SocketContext } from "../context/SocketContext.jsx";
+import "../styles/Canvas.css";
 
-export default function Canvas() {
+export default function Canvas({ isDrawing }) {
   const canvasRef = useRef(null); // Ref to the canvas HTML element
   const contextRef = useRef(null); // Ref to the canvas 2D context
   const isDrawingRef = useRef(false); // Ref to track if drawing is active
 
+  const { socket, isConnected, roomId } = useContext(SocketContext);
   const [tool, setTool] = useState("pencil"); // 'pencil' or 'eraser'
   const [lineWidth, setLineWidth] = useState(3);
   const [strokeColor, setStrokeColor] = useState("#000000"); // Default to black
 
-  const { socket, isConnected, joinedRoom } = useContext(SocketContext);
   const [completedStrokes, setCompletedStrokes] = useState([]); // Store completed strokes
   const currentStrokeRef = useRef(null); // Ref to track the current stroke being drawn
+
+  const drawStrokes = useCallback((strokes) => {
+    const context = contextRef.current;
+    if (!context) return;
+
+    context.save();
+    strokes.forEach((stroke) => {
+      context.lineWidth = stroke.lineWidth;
+      context.strokeStyle = stroke.color;
+      context.globalCompositeOperation =
+        stroke.tool === "eraser" ? "destination-out" : "source-over";
+
+      context.beginPath();
+      context.moveTo(stroke.points[0].x, stroke.points[0].y);
+      for (let i = 1; i < stroke.points.length; i++) {
+        context.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+      context.stroke();
+    });
+    context.restore();
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
 
-    socket.on(DRAW_EVENT, ({ senderId, strokes }) => {
-      if (socket.id === senderId) return;
-      console.log("Received draw event from:", senderId);
+    socket.on(DRAW_EVENT, (data) => {
+      console.log("Received drawing event:", data);
+      if (socket.id === data.senderId) return;
+      drawStrokes(data.strokes);
+    });
 
-      const context = contextRef.current;
-      if (!context) return;
-
-      context.save();
-
-      strokes.forEach((stroke) => {
-        context.lineWidth = stroke.lineWidth || 3;
-        context.strokeStyle = stroke.color || "#000000";
-        context.globalCompositeOperation =
-          stroke.tool === "eraser" ? "destination-out" : "source-over";
-
-        context.beginPath();
-        context.moveTo(stroke.points[0].x, stroke.points[0].y);
-        for (let i = 1; i < stroke.points.length; i++) {
-          context.lineTo(stroke.points[i].x, stroke.points[i].y);
-        }
-        context.stroke();
-      });
+    socket.on(CLEAR_CANVAS, () => {
+      console.log("Received clear canvas event");
+      clearCanvas();
     });
 
     return () => {
       socket.off(DRAW_EVENT);
+      socket.off(CLEAR_CANVAS);
     };
-  }, [socket]);
+  }, [socket, drawStrokes]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -101,6 +111,8 @@ export default function Canvas() {
 
   const startDrawing = useCallback(
     (event) => {
+      if (!isDrawing) return;
+
       const context = contextRef.current;
       if (!context) return;
       const { x, y } = getCoordinates(event);
@@ -115,27 +127,27 @@ export default function Canvas() {
         points: [{ x, y }],
       };
       event.preventDefault();
-
-      console.log("Start drawing at:", x, y);
     },
-    [tool, strokeColor, lineWidth]
+    [tool, strokeColor, lineWidth, isDrawing]
   );
 
-  const draw = useCallback((event) => {
-    if (!isDrawingRef.current) return;
-    const context = contextRef.current;
-    if (!context) return;
+  const draw = useCallback(
+    (event) => {
+      if (!isDrawingRef.current || !isDrawing) return;
+      const context = contextRef.current;
+      if (!context) return;
 
-    const { x, y } = getCoordinates(event);
-    context.lineTo(x, y);
-    context.stroke();
+      const { x, y } = getCoordinates(event);
+      context.lineTo(x, y);
+      context.stroke();
 
-    if (currentStrokeRef.current) {
-      currentStrokeRef.current.points.push({ x, y });
-    }
-    event.preventDefault();
-    console.log("Drawing at:", x, y);
-  }, []);
+      if (currentStrokeRef.current) {
+        currentStrokeRef.current.points.push({ x, y });
+      }
+      event.preventDefault();
+    },
+    [isDrawing]
+  );
 
   const stopDrawing = useCallback(() => {
     const context = contextRef.current;
@@ -154,13 +166,16 @@ export default function Canvas() {
         ]);
         currentStrokeRef.current = null;
       }
-      console.log("Stop drawing");
     }
   }, []);
 
   const handleClearCanvas = useCallback(() => {
     clearCanvas();
-  }, []);
+    if (socket && isConnected && roomId) {
+      console.log("Emitting clear canvas event");
+      socket.emit(CLEAR_CANVAS, { roomId });
+    }
+  }, [socket, isConnected, roomId]);
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
@@ -179,42 +194,48 @@ export default function Canvas() {
 
   useEffect(() => {
     const logInterval = 20;
+    let isMounted = true;
 
     const intervalId = setInterval(() => {
-      setCompletedStrokes((currentStrokes) => {
-        if (currentStrokes.length > 0) {
-          const payloadToSend = [...currentStrokes];
-          const currentLondonTime = new Date().toLocaleTimeString("en-GB", {
-            timeZone: "Europe/London",
-          });
-          console.log(
-            `[${currentLondonTime}] Strokes Payload to Send (${payloadToSend.length} strokes):`,
-            payloadToSend
-          );
+      if (!isMounted) return;
 
-          if (socket && isConnected && joinedRoom) {
-            const payload = {
-              senderId: socket.id,
-              roomId: joinedRoom,
-              strokes: payloadToSend,
-            };
-            socket.emit(DRAW_EVENT, payload);
-            return [];
-          } else {
-            console.warn(
-              "Socket not ready or not in room. Strokes NOT cleared, will try again next interval."
-            );
-            return currentStrokes;
-          }
+      setCompletedStrokes((currentStrokes) => {
+        if (currentStrokes.length === 0) return currentStrokes;
+
+        if (!socket || !isConnected || !roomId) {
+          console.warn(
+            "Socket not ready or not in room. Strokes NOT cleared, will try again next interval.",
+            { isConnected, roomId, socket: !!socket }
+          );
+          return currentStrokes;
         }
-        return currentStrokes;
+
+        const payloadToSend = [...currentStrokes];
+        const payload = {
+          senderId: socket.id,
+          roomId: roomId,
+          strokes: payloadToSend,
+        };
+
+        try {
+          console.log("Sending drawing event:", {
+            roomId,
+            strokeCount: payloadToSend.length,
+          });
+          socket.emit(DRAW_EVENT, payload);
+          return [];
+        } catch (error) {
+          console.error("Error sending drawing data:", error);
+          return currentStrokes;
+        }
       });
     }, logInterval);
 
     return () => {
+      isMounted = false;
       clearInterval(intervalId);
     };
-  }, [socket, isConnected, joinedRoom]);
+  }, [socket, isConnected, roomId]);
 
   return (
     <div className="canvas-container">
@@ -249,20 +270,14 @@ export default function Canvas() {
           type="range"
           id="lineWidth"
           min="1"
-          max="50"
+          max="20"
           value={lineWidth}
-          onChange={(e) => setLineWidth(parseInt(e.target.value, 10))}
+          onChange={(e) => setLineWidth(parseInt(e.target.value))}
         />
         <span>{lineWidth}</span>
 
         {/* Clear Button */}
-        <button onClick={handleClearCanvas}>Clear Canvas</button>
-        <span style={{ marginLeft: "auto", fontSize: "0.8em", color: "#555" }}>
-          London Time:{" "}
-          {new Date().toLocaleTimeString("en-GB", {
-            timeZone: "Europe/London",
-          })}
-        </span>
+        <button onClick={handleClearCanvas}>Clear</button>
       </div>
 
       <canvas

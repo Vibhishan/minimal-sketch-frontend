@@ -1,0 +1,61 @@
+.canvas-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 5px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.toolbar button {
+  padding: 8px 16px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.toolbar button:hover {
+  background-color: #0b7dda;
+}
+
+.toolbar button.active {
+  background-color: #0b7dda;
+}
+
+.toolbar label {
+  margin-right: 5px;
+  color: #333;
+}
+
+.toolbar input[type="color"] {
+  width: 40px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.toolbar input[type="range"] {
+  width: 100px;
+}
+
+.drawing-canvas {
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  touch-action: none;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
