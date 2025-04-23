@@ -55,6 +55,10 @@ export default function Canvas({ isDrawing }) {
     socket.on(CLEAR_CANVAS, () => {
       console.log("Received clear canvas event");
       clearCanvas();
+      setCompletedStrokes([]);
+      if (currentStrokeRef.current) {
+        currentStrokeRef.current = null;
+      }
     });
 
     return () => {
@@ -62,6 +66,15 @@ export default function Canvas({ isDrawing }) {
       socket.off(CLEAR_CANVAS);
     };
   }, [socket, drawStrokes]);
+
+  // Reset canvas when drawing state changes
+  useEffect(() => {
+    clearCanvas();
+    setCompletedStrokes([]);
+    if (currentStrokeRef.current) {
+      currentStrokeRef.current = null;
+    }
+  }, [isDrawing]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -92,18 +105,23 @@ export default function Canvas({ isDrawing }) {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
 
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     if (event.nativeEvent.offsetX !== undefined) {
-      return { x: event.nativeEvent.offsetX, y: event.nativeEvent.offsetY };
+      return {
+        x: event.nativeEvent.offsetX * scaleX,
+        y: event.nativeEvent.offsetY * scaleY,
+      };
     } else if (
       event.nativeEvent.touches &&
       event.nativeEvent.touches.length > 0
     ) {
-      const rect = canvas.getBoundingClientRect();
       const touch = event.nativeEvent.touches[0];
-
       return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top,
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY,
       };
     }
     return { x: 0, y: 0 };

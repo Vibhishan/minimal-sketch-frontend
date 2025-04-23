@@ -1,12 +1,95 @@
-.app {
-  min-height: 100vh;
-  background-color: #f5f5f5;
-}
-
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+.app {
+  min-height: 100vh;
+  width: 100vw;
+  background-image: url("./assets/PC background minimal sketch.svg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  width: 100%;
+  height: calc(100vh - 120px); /* Subtract header and footer height */
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.7);
+}
+
+.start-navbar {
+  background-color: rgba(255, 255, 255, 0.85);
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  position: fixed;
+  top: 0;
+  z-index: 1000;
+  height: 60px;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.navbar-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.developer-title {
+  color: #666;
+  font-size: 1.2rem;
+}
+
+.repo-button {
+  background-color: #24292e;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.repo-button:hover {
+  background-color: #1a1f24;
+}
+
+.start-footer {
+  background-color: rgba(255, 255, 255, 0.85);
+  padding: 1rem;
+  text-align: center;
+  color: #666;
+  font-size: 0.9rem;
+  box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  position: fixed;
+  bottom: 0;
+  z-index: 1000;
+  height: 50px;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.footer-link {
+  color: #24292e;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.footer-link:hover {
+  text-decoration: underline;
 }
 
 body {
