@@ -1,14 +1,14 @@
-# Minimal Sketch - A Real-time Drawing Game
+# 🎨 Minimal Sketch - A Real-time Drawing Game
 
 Minimal Sketch is a multiplayer drawing and guessing game where players take turns drawing while others try to guess the word. Built with React, Socket.io, and Vite.
 
-## Features
+## ✨ Features
 
-- Real-time multiplayer gameplay
-- Drawing canvas with multiple tools (pencil, eraser)
-- Live chat functionality
+- 🎮 Real-time multiplayer gameplay
+- 🖌️ Drawing canvas with multiple tools (pencil, eraser)
+- 💬 Live chat functionality
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 src/
@@ -25,7 +25,7 @@ src/
 └── context/             # React context providers
 ```
 
-## Tech Stack
+## 🛠️ Tech Stack
 
 - React 19
 - Vite 6
@@ -33,14 +33,14 @@ src/
 - React Router 6
 - ESLint 9
 
-## Getting Started
+## 🚀 Getting Started
 
-### Prerequisites
+### 📋 Prerequisites
 
 - Node.js (Latest LTS version recommended)
 - npm or yarn
 
-### Installation
+### ⚙️ Installation
 
 1. Clone the repository
 
@@ -57,14 +57,14 @@ npm install
 yarn install
 ```
 
-### Available Scripts
+### 📜 Available Scripts
 
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
 - `npm run lint` - Run ESLint
 - `npm run preview` - Preview production build
 
-### Development
+### 💻 Development
 
 1. Start the development server:
 
@@ -74,7 +74,7 @@ npm run dev
 
 2. Open your browser and navigate to `http://localhost:5173`
 
-## Game Flow
+## 🎲 Game Flow
 
 1. Players join through the Landing Page
 2. Enter Waiting Room to start a game
@@ -83,7 +83,7 @@ npm run dev
    - Timer counts down for each turn
    - Points awarded for correct guesses
 
-## Component Details
+## 🧩 Component Details
 
 ### Canvas.jsx
 
@@ -114,7 +114,7 @@ npm run dev
 - Visual feedback
 - Time-up event handling
 
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
@@ -122,9 +122,9 @@ npm run dev
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## Future Features & Improvements
+## 🔮 Future Features & Improvements
 
-### Gameplay Enhancements
+### 🎮 Gameplay Enhancements
 
 - Round-based gameplay with multiple rounds per game
 - Final scores display at game end
@@ -133,7 +133,7 @@ npm run dev
 - Different game modes (e.g., speed drawing, team play)
 - Power-ups and special abilities
 
-### Drawing Features
+### 🎨 Drawing Features
 
 - More drawing tools (brush, spray, shapes)
 - Undo/Redo functionality
@@ -142,7 +142,7 @@ npm run dev
 - Drawing templates or stencils
 - Layer support for complex drawings
 
-### Social Features
+### 👥 Social Features
 
 - Player profiles and avatars
 - Friend system and private rooms
@@ -151,7 +151,7 @@ npm run dev
 - Spectator mode
 - Replay system for past games
 
-### Technical Improvements
+### ⚡ Technical Improvements
 
 - Responsive design for all screen sizes
 - Offline mode with local storage
@@ -160,7 +160,7 @@ npm run dev
 - Analytics and game statistics
 - Dark mode support
 
-### Accessibility
+### ♿ Accessibility
 
 - Screen reader support
 - Keyboard shortcuts
@@ -169,7 +169,7 @@ npm run dev
 - Adjustable font sizes
 - Reduced motion options
 
-### Security & Moderation
+### 🔒 Security & Moderation
 
 - Report system for inappropriate content
 - Word filtering and moderation
